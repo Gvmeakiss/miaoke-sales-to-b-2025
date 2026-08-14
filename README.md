@@ -1,4 +1,46 @@
-# 销售三单匹配系统（妙可 toB）
+# 销售三单匹配系统（妙可 ToB 2025）
+
+> 2025 全年销售订单、发货、SAP 开票三单匹配，支持 OMS / DMS 数据源与发运单导出。
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Platform-macOS-000000?logo=apple&logoColor=white" alt="macOS">
+  <img src="https://img.shields.io/badge/Scope-OMS%20%7C%20DMS-1F6FB2" alt="Scope">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/github/last-commit/Gvmeakiss/miaoke-sales-to-b-2025?label=updated" alt="Updated">
+</p>
+
+## 📋 目录
+
+- [快速开始](#快速开始)
+- [项目简介](#项目简介)
+- [目录结构](#目录结构)
+- [一、数据源与调用指南](#一数据源与调用指南)
+  - [1.1 数据源路径（项目根目录下）](#11-数据源路径项目根目录下)
+  - [1.2 预处理产出（`pkl/` 目录）](#12-预处理产出pkl-目录)
+  - [1.3 订单 OMS 与 DMS 区分](#13-订单-oms-与-dms-区分)
+  - [1.4 匹配键定义（客户确认）](#14-匹配键定义客户确认)
+  - [1.5 发票类型与金额/数量列](#15-发票类型与金额数量列)
+- [二、代码运行逻辑](#二代码运行逻辑)
+  - [2.1 OMS 三单匹配流程（match_oms.py）](#21-oms-三单匹配流程match_omspy)
+  - [2.2 DMS 三单匹配流程（match_dms.py）](#22-dms-三单匹配流程match_dmspy)
+  - [2.3 发运单导出（export_delivery_to_excel.py）](#23-发运单导出export_delivery_to_excelpy)
+- [三、配置与输出](#三配置与输出)
+  - [3.1 配置（config.py）](#31-配置configpy)
+  - [3.2 输出文件](#32-输出文件)
+- [四、分类说明](#四分类说明)
+- [五、常用操作](#五常用操作)
+- [六、调试与问题解决](#六调试与问题解决)
+  - [6.1 新数据源适配](#61-新数据源适配)
+  - [6.2 2.Not test 误判](#62-2not-test-误判)
+  - [6.3 OMS 匹配键与发票不一致](#63-oms-匹配键与发票不一致)
+  - [6.4 汇总表与输出规范](#64-汇总表与输出规范)
+  - [6.5 DMS 总计与发票清单金额差异](#65-dms-总计与发票清单金额差异)
+  - [6.6 OMS 与 DMS 金额口径](#66-oms-与-dms-金额口径)
+  - [6.7 PKL 缓存机制](#67-pkl-缓存机制)
+  - [6.8 其他](#68-其他)
+- [技术栈](#技术栈)
+- [可复用工具包](#可复用工具包)
 
 > 销售订单、发货、SAP 开票三单匹配系统，支持 OMS 与 DMS 数据匹配，用于对账和差异分析。
 
@@ -273,3 +315,13 @@ Python 3.8+ · pandas · openpyxl · chardet
 ## 可复用工具包
 
 项目根目录下的 `triple_match_tool/` 为独立可复用包，仅包含三单匹配核心逻辑（不含 test）。可复制到其它项目使用，详见 [triple_match_tool/README.md](../triple_match_tool/README.md)。
+
+---
+
+<div align="center">
+
+**James Li · 审计数据分析工具集**
+
+📫 本工具用于内部审计与数据核对，辅助分析但不替代专业判断，不作为对外签字版本。
+
+</div>
