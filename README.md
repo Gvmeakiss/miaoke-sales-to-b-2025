@@ -1,327 +1,142 @@
-# 销售三单匹配系统（妙可 ToB 2025）
+# 销售三单匹配（Miaoke · 2025 toB） 🧾
 
-> 2025 全年销售订单、发货、SAP 开票三单匹配，支持 OMS / DMS 数据源与发运单导出。
+> 对 Miaoke 2025 年全年 toB 销售订单、发运单与 SAP 发票执行三单匹配，按 OMS / DMS 渠道输出差异分类与审计底稿的工具。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Platform-macOS-000000?logo=apple&logoColor=white" alt="macOS">
-  <img src="https://img.shields.io/badge/Scope-OMS%20%7C%20DMS-1F6FB2" alt="Scope">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/github/last-commit/Gvmeakiss/miaoke-sales-to-b-2025?label=updated" alt="Updated">
-</p>
+[![Language](https://img.shields.io/badge/language-Python-blue)](https://github.com/Gvmeakiss/miaoke-sales-to-b-2025) [![License](https://img.shields.io/badge/license-MIT-green)](https://github.com/Gvmeakiss/miaoke-sales-to-b-2025/blob/main/LICENSE) [![Domain](https://img.shields.io/badge/domain-Audit%20Analytics-orange)](https://github.com/Gvmeakiss/miaoke-sales-to-b-2025)
 
-## 📋 目录
+## 📌 项目简介
 
-- [快速开始](#快速开始)
-- [项目简介](#项目简介)
-- [目录结构](#目录结构)
-- [一、数据源与调用指南](#一数据源与调用指南)
-  - [1.1 数据源路径（项目根目录下）](#11-数据源路径项目根目录下)
-  - [1.2 预处理产出（`pkl/` 目录）](#12-预处理产出pkl-目录)
-  - [1.3 订单 OMS 与 DMS 区分](#13-订单-oms-与-dms-区分)
-  - [1.4 匹配键定义（客户确认）](#14-匹配键定义客户确认)
-  - [1.5 发票类型与金额/数量列](#15-发票类型与金额数量列)
-- [二、代码运行逻辑](#二代码运行逻辑)
-  - [2.1 OMS 三单匹配流程（match_oms.py）](#21-oms-三单匹配流程match_omspy)
-  - [2.2 DMS 三单匹配流程（match_dms.py）](#22-dms-三单匹配流程match_dmspy)
-  - [2.3 发运单导出（export_delivery_to_excel.py）](#23-发运单导出export_delivery_to_excelpy)
-- [三、配置与输出](#三配置与输出)
-  - [3.1 配置（config.py）](#31-配置configpy)
-  - [3.2 输出文件](#32-输出文件)
-- [四、分类说明](#四分类说明)
-- [五、常用操作](#五常用操作)
-- [六、调试与问题解决](#六调试与问题解决)
-  - [6.1 新数据源适配](#61-新数据源适配)
-  - [6.2 2.Not test 误判](#62-2not-test-误判)
-  - [6.3 OMS 匹配键与发票不一致](#63-oms-匹配键与发票不一致)
-  - [6.4 汇总表与输出规范](#64-汇总表与输出规范)
-  - [6.5 DMS 总计与发票清单金额差异](#65-dms-总计与发票清单金额差异)
-  - [6.6 OMS 与 DMS 金额口径](#66-oms-与-dms-金额口径)
-  - [6.7 PKL 缓存机制](#67-pkl-缓存机制)
-  - [6.8 其他](#68-其他)
-- [技术栈](#技术栈)
-- [可复用工具包](#可复用工具包)
+本仓库处理 Miaoke 2025 年全年 toB 销售三单匹配，是 2026H1 版本（AQPP 24 组）之前的 FY25 口径实现。它读取客户订单 SQL、发运单 SQL 与 SAP 发票，按 OMS / DMS 两条渠道分别匹配，输出「完全匹配 / 数量一致金额有差异 / 金额一致数量有差异 / 均有差异 / 有缺失 / Not test」分类汇总与明细，供收入审计勾稽差异。OMS 与 DMS 共用同一套标准化 PKL，仅在内存中按渠道字段筛选区分。
 
-> 销售订单、发货、SAP 开票三单匹配系统，支持 OMS 与 DMS 数据匹配，用于对账和差异分析。
+## ✨ 功能特性
 
-**运行环境**：macOS。Windows 兼容性未保证。
+- **双渠道匹配**：OMS 与 DMS 共用 PKL，通过 `platform_order_no` / `DMS销售单号` 是否非空在内存中互斥切分。
+- **FY25 分类体系**：`scenario_utils.assign_scenario_oms` / `assign_scenario_dms` 按容差 `AMT_TOL = 0.02`、`QTY_TOL = 0.02` 判 `订单-发票金额` 与 `订单-发货/开票数量` 关系，归为 `1.完全匹配`、`2.数量一致金额有差异`、`3.金额一致数量有差异`、`4.均有差异`、`5.有缺失`；关键字段缺失者标记 `2.Not test`。
+- **状态与范围剔除**：`config.ORDER_STATUS_EXCLUDE = ['OBSOLETE','CANCEL']`；`SALES_ORG_123 = ['1240','1250','1260']` 三家销售组织单独分组/剔除。
+- **发票类型治理**：`config.INVOICE_TYPES = ['ZA01','ZB02','ZQ01','ZQ07']`（标准、退货、取消等）参与匹配。
+- **SQL 解析与编码检测**：`preprocess_oms_full_year.py` 的 `detect_file_encoding`（chardet）、`parse_order_sql_11/12/13_cols`、`parse_delivery_sql_file`、`build_oms_order_pkl_full_year` / `build_oms_delivery_pkl_full_year` 支持多种列结构的订单/发运 SQL；`sap_invoice_processor.py` 的 `read_sap_data` / `analyze_invoice_types` / `split_by_invoice_type` 处理 SAP 发票；`sql_to_accounting_excel.py` 将 SQL 转会计 Excel。
+- **发运单导出**：`export_delivery_to_excel.py` 读取发货 PKL 导出 Excel，超过 `1,048,575` 行自动分多个 sheet。
+- **固定汇总顺序**：`export_utils.FIXED_SUMMARY_ROW_ORDER`、`generate_summary_report`、`export_with_classification` 控制汇总行与分类明细导出。
+- **校验与适配文档**：`test/` 含 PKL 合规检查、匹配字段验证、按渠道/期间匹配脚本，以及 `三单匹配逻辑与筛选条件核对.md`、`匹配键核对-依客户确认字段.md`、`新数据源适配审阅报告.md`、`订单OMS与DMS区分说明.md` 等审阅记录。
 
----
+## 📂 目录结构
 
-## 快速开始
+```
+miaoke-sales-to-b-2025/
+├── README.md
+├── config.py                     # 路径、OUTPUT_PREFIX、ORDER_STATUS_EXCLUDE、SALES_ORG_123、INVOICE_TYPES
+├── launch_all.py                 # 依次执行 match_oms.py、match_dms.py
+├── preprocess_oms_full_year.py   # SQL 解析 → 三份标准化 PKL（订单/发货/发票）
+├── match_oms.py                  # OMS 三单匹配、分类与导出
+├── match_dms.py                  # DMS 三单匹配、分类与导出
+├── scenario_utils.py             # 分类逻辑（AMT_TOL/QTY_TOL、assign_scenario_oms/dms、get_export_categories）
+├── export_utils.py               # 汇总表、分类明细导出
+├── export_schema.py              # 导出字段定义
+├── export_delivery_to_excel.py   # 发运单 PKL → Excel（超行分卷）
+├── sap_invoice_processor.py      # SAP 发票读取/类型分析/拆分
+├── sql_to_accounting_excel.py    # SQL 转会计 Excel
+├── requirements.txt              # pandas>=2.0 / numpy>=1.24 / openpyxl>=3.1 / chardet>=5.0
+├── test/                         # 校验脚本与适配审阅文档
+│   ├── check_pkl_compliance.py
+│   ├── check_fullyear_pkl.py
+│   ├── verify_match_fields.py
+│   ├── verify_order_invoice_type.py
+│   ├── match_oms_full_year.py / match_oms_1_9_months.py
+│   ├── match_dms_full_year_from_sql.py / match_dms_1_9_months_from_sql.py / match_dms_from_sql.py
+│   ├── analyze_nottest.py
+│   ├── preprocess_full_year.py   # 已弃用
+│   └── *.md（匹配逻辑、匹配键、新数据源适配、OMS/DMS 区分等审阅说明）
+└── LICENSE
+```
+
+## 🔧 环境要求
+
+- Python 3.8+（README 标注；代码使用 f-string、`pathlib`、类型注解）
+- 依赖见 `requirements.txt`：`pandas>=2.0`、`numpy>=1.24`、`openpyxl>=3.1`、`chardet>=5.0`
+
+## 🚀 安装
 
 ```bash
-cd code
-pip install pandas openpyxl chardet
+git clone https://github.com/Gvmeakiss/miaoke-sales-to-b-2025.git
+cd miaoke-sales-to-b-2025
+pip install -r requirements.txt
+```
 
-# 首次运行：预处理
-python preprocess_oms_full_year.py
+## 💡 快速开始 / 使用示例
 
-# 三单匹配
-python match_oms.py          # OMS
-python match_dms.py          # DMS
+预处理生成三份标准化 PKL 后，分别运行 OMS / DMS 匹配：
+
+```bash
+# 首次运行：解析 SQL、生成 PKL
+python3 preprocess_oms_full_year.py
+
+# 三单匹配（OMS、DMS）
+python3 match_oms.py
+python3 match_dms.py
+
+# 或一键执行两者
+python3 launch_all.py
 
 # 发运单导出 Excel
-python export_delivery_to_excel.py
+python3 export_delivery_to_excel.py
 
-# 批量运行
-python launch_all.py
+# PKL 合规检查
+python3 test/check_pkl_compliance.py
 ```
 
----
+匹配结果 Excel 含「汇总表」（首 sheet）、「全部数据」与各分类明细 sheet；PKL 默认复用，`match_oms.py` 会写入 `oms_order.pkl` 等缓存，存在则优先读取。
 
-## 项目简介
+## 🧠 核心逻辑（方法论）
 
-- **三单数据匹配**：订单、发货、发票
-- **差异计算与分类**：完全匹配、金额/数量不一致、数据缺失等
-- **按销售组织分组**：1240/1250/1260 vs 剔除三家
-- **支持**：2025 年全年 OMS / DMS 匹配、发运单导出
+1. **预处理标准化**：`preprocess_oms_full_year.py` 以 `detect_file_encoding` 检测 SQL 编码，按 11/12/13 列结构解析订单、解析发运单，构建 `2025年全年OMS订单.pkl` / `2025年全年OMS发货.pkl`；发票由 `sap_invoice_processor.py` / `sql_to_accounting_excel.py` 处理为 `2025年全年SAP原始数据.pkl`。
+2. **渠道筛选**：`match_oms.py`（`load_oms_order_delivery_invoice`）与 `match_dms.py` 加载同一套 PKL；OMS 取 `platform_order_no` 与 `DMS销售单号` 均为空的行，DMS 取其非空行；并剔除 `OBSOLETE` / `CANCEL` 订单。
+3. **匹配键**：OMS 用 `main_order_no + 物料`、发运 `main_order_no + 料号`、发票 `OMS销售单号 + 物料编码`；DMS 用 `platform_order_no + 物料` / `external_order_no + 料号` / `DMS销售单号 + 物料编码`。
+4. **聚合与差异**：按匹配键聚合金额与数量，以发票为基准左连接订单与发运，计算 `订单-发票金额`、`订单-发货数量`、`订单-开票数量` 等差异。
+5. **分类**：`scenario_utils.assign_scenario_oms/dms` 用 `AMT_TOL=0.02`、`QTY_TOL=0.02`（`abs(差) < 容差` 视为一致）判关系，归为 `1.完全匹配` – `4.均有差异`、`5.有缺失`，并就关键字段缺失打 `2.Not test`。分类仅做差异归集，不自动下错报结论。
+6. **导出**：`export_utils.export_with_classification` + `generate_summary_report` 按 `FIXED_SUMMARY_ROW_ORDER` 输出汇总与各分类明细；金额口径上 OMS 用 `实际金额（ZFN1）`、DMS 用 `含税金额`。
 
----
+## 📋 输入与输出
 
-## 目录结构
+- **输入**：客户订单 SQL、发运单 SQL（经 `preprocess_oms_full_year.py` 解析）与 SAP 发票数据；发票类型限 `ZA01/ZB02/Zut...` 即 `INVOICE_TYPES` 配置范围。
+- **中间数据**：`pkl/` 下三份标准化 PKL（`2025年全年OMS订单.pkl`、`2025年全年OMS发货.pkl`、`2025年全年SAP原始数据.pkl`），OMS 另写 `oms_order.pkl` 等缓存。
+- **输出**（`output/`）：OMS / DMS 匹配结果 Excel（汇总表 + 全部数据 + 各分类明细，文件名前缀 `2025年全年`），以及 `2025年全年发运单.xlsx`（超 `1,048,575` 行自动分卷）。
 
-```
-code/
-├── config.py                    # 配置（路径、pkl、筛选条件）
-├── preprocess_oms_full_year.py  # 数据预处理
-├── match_oms.py                 # OMS 三单匹配
-├── match_dms.py                 # DMS 三单匹配
-├── export_delivery_to_excel.py  # 发运单导出 Excel
-├── export_utils.py              # 导出与汇总表工具
-├── export_schema.py             # 导出字段定义
-├── scenario_utils.py            # 场景分类工具
-├── launch_all.py                # 批量运行 OMS + DMS
-├── sap_invoice_processor.py    # SAP 发票处理
-├── sql_to_accounting_excel.py   # SQL 转会计 Excel
-└── test/                        # 测试与辅助脚本
-    ├── check_pkl_compliance.py  # pkl 合规检查
-    ├── check_fullyear_pkl.py    # 全年 pkl 存在性检查
-    ├── verify_match_fields.py   # 匹配字段验证
-    ├── verify_order_invoice_type.py
-    ├── match_oms_full_year.py
-    ├── match_oms_1_9_months.py
-    ├── match_dms_full_year_from_sql.py
-    ├── match_dms_1_9_months_from_sql.py
-    ├── match_dms_from_sql.py
-    ├── analyze_nottest.py
-    └── preprocess_full_year.py  # 冗余，已弃用
+## ⚙️ 配置说明
 
-项目根目录/
-├── input/dingdan/               # 订单 SQL
-├── input/fapiao/                # 发票 Excel（可选）
-├── input/fayundan/              # 发运单 SQL
-├── output/                      # 输出（匹配结果、发运单 xlsx）
-├── pkl/                         # 缓存 pkl
-├── refer/                       # 参考文档
-└── scripts/filter_fapiao_2025.py  # 发票预处理
-```
+集中在 `config.py`：
 
----
+- `OUTPUT_PREFIX = '2025年全年'`、`OUTPUT_DIR` / `PKL_DIR`；
+- `ORDER_PKL` / `DELIVERY_PKL` / `INVOICE_PKL` 三份源 PKL 路径；
+- `ORDER_STATUS_EXCLUDE = ['OBSOLETE','CANCEL']`；
+- `SALES_ORG_123 = ['1240','1250','1260']`；
+- `INVOICE_TYPES = ['ZA01','ZB02','ZQ01','ZQ07']`；
+- 容差定义在 `scenario_utils.py`：`AMT_TOL = 0.02`、`QTY_TOL = 0.02`。
 
-## 一、数据源与调用指南
+注：分类阈值集中在 `scenario_utils` 的 `AMT_TOL` / `QTY_TOL`，主流程以 `abs(差) < 容差` 判断一致，未散落硬编码浮点相等比较。
 
-### 1.1 数据源路径（项目根目录下）
+## ⚠️ 注意事项
 
-| 类型 | 路径 | 文件 |
-|------|------|------|
-| **订单** | `input/dingdan/` | `24年12月到25年6月订单数据.sql`<br>`25年7月到25年12月订单数据.sql` |
-| **发运单** | `input/fayundan/` | `24年12月到25年6月发货数据.sql`<br>`25年7月到26年1月发货数据.sql` |
-| **发票** | `output/fapiao_2025_filtered.pkl` | 需先由 `scripts/filter_fapiao_2025.py` 生成 |
+- 数据脱敏：仓库不含真实客户业务数据，示例与说明均为脱敏/合成数据；实际运行需将客户导出文件放入对应输入目录。
+- 口径说明：渠道切分、状态剔除、发票类型与容差以 `config.py` / `scenario_utils.py` 与代码为准，本 README 仅作说明。
+- 版本差异：本仓库为 FY25 口径（分类式），与 2026H1 版本的 AQPP 24 子组口径不同，跨年对比时需注意分类体系切换。
+- 审计结论：程序仅归类差异，错报应对由项目组人工选择。
 
-### 1.2 预处理产出（`pkl/` 目录）
+## 🔗 相关仓库
 
-| 文件 | 用途 | 生成脚本 |
-|------|------|----------|
-| `pkl/2025年全年OMS订单.pkl` | OMS/DMS 共用订单源 | preprocess_oms_full_year.py |
-| `pkl/2025年全年OMS发货.pkl` | OMS/DMS 共用发货源 | preprocess_oms_full_year.py |
-| `pkl/2025年全年SAP原始数据.pkl` | OMS/DMS 共用发票源 | preprocess_oms_full_year.py（复制 fapiao_2025_filtered.pkl） |
+- https://github.com/Gvmeakiss/sales-three-match-miaoke-2026
+- https://github.com/Gvmeakiss/miaoke-sales-to-b-2026
+- https://github.com/Gvmeakiss/miaoke-sales-to-c
+- https://github.com/Gvmeakiss/sales-three-match-newhope-2026
 
-**说明**：OMS 与 DMS 共用同一套 pkl，通过内存筛选区分：
-- **OMS**：`platform_order_no` 为空、`DMS销售单号` 为空
-- **DMS**：`platform_order_no` 非空、`DMS销售单号` 非空
+## 📄 License
 
-### 1.3 订单 OMS 与 DMS 区分
-
-| 判据 | OMS | DMS |
-|------|-----|-----|
-| **主判据** | `channel_name` 不含 'DMS' | `channel_name` 含 'DMS' |
-| **platform_order_no** | 多为 NULL | 多为非空 |
-| **匹配键** | main_order_no + 物料（与发票主订单号对齐） | platform_order_no + 物料 |
-
-### 1.4 匹配键定义（客户确认）
-
-| 数据源 | OMS 匹配键 | DMS 匹配键 |
-|--------|------------|------------|
-| 订单 | main_order_no + item_code | platform_order_no + item_code |
-| 发运单 | main_order_no + 料号 | external_order_no + 料号 |
-| 发票 | OMS销售单号 + 物料编码 | DMS销售单号 + 物料编码 |
-
-发票侧 OMS 销售单号 = OMS 主订单号；未拆单时子订单号=主订单号，拆单时需按主订单号聚合再匹配。
-
-### 1.5 发票类型与金额/数量列
-
-- **发票类型**：ZA01、ZB02、ZQ01、ZQ07（标准、退货、取消等，fapiao_2025_filtered.pkl 已筛选）
-- **OMS 金额**：实际金额（ZFN1）
-- **DMS 金额**：含税金额
-- **数量**：开票数量（基本单位）
-
----
-
-## 二、代码运行逻辑
-
-### 2.1 OMS 三单匹配流程（match_oms.py）
-
-```
-1. 加载 pkl（订单、发货、发票）
-2. 筛选：订单 platform_order_no 为空、发票 DMS销售单号 为空
-3. 订单筛选：order_status ≠ OBSOLETE/CANCEL
-4. 创建匹配键 order-item（main_order_no + 物料）
-5. 按 order-item 聚合金额、数量
-6. 以发票为基准左连接订单、发货
-7. 计算差异（订单-开票数量、发货-开票数量、订单-发票金额）
-8. 分类：2.Not test / 1.1完全匹配 / 1.2金额不一致 / 1.3数量不一致 / 1.4均不一致
-9. 按销售组织分组（1240/1250/1260 vs 剔除三家）
-10. 导出 Excel（汇总表 + 全部数据 + 各分类明细）
-```
-
-### 2.2 DMS 三单匹配流程（match_dms.py）
-
-```
-1. 加载 pkl（同 OMS）
-2. 筛选：订单 platform_order_no 非空、发票 DMS销售单号 非空
-3. 订单筛选：channel_name 含 'DMS'，order_status ≠ OBSOLETE/CANCEL
-4. 发货筛选：external_order_no 非空
-5. 创建匹配键（platform_order_no / external_order_no + 物料）
-6. 聚合、匹配、差异计算、分类（与 OMS 一致）
-7. 按销售组织分组、导出 Excel
-```
-
-### 2.3 发运单导出（export_delivery_to_excel.py）
-
-- 从 `pkl/2025年全年OMS发货.pkl` 读取
-- 导出至 `output/2025年全年发运单.xlsx`
-- 超过 Excel 单 sheet 最大行数（1,048,575）时自动分多个 sheet
-
----
-
-## 三、配置与输出
-
-### 3.1 配置（config.py）
-
-| 配置项 | 说明 |
-|--------|------|
-| `OUTPUT_DIR` | 输出目录，默认 `BASE/output` |
-| `PKL_DIR` | 缓存目录，默认 `BASE/pkl` |
-| `ORDER_PKL` / `DELIVERY_PKL` / `INVOICE_PKL` | 源 pkl 路径 |
-| `ORDER_STATUS_EXCLUDE` | 排除的订单状态：OBSOLETE、CANCEL |
-| `SALES_ORG_123` | 三家销售组织：1240、1250、1260 |
-
-### 3.2 输出文件
-
-| 类型 | 文件示例 |
-|------|----------|
-| OMS 匹配 | `output/2025年全年匹配结果-销售（toB OMS）明细（剔除三家）.xlsx` |
-| DMS 匹配 | `output/2025年全年匹配结果-销售（toB DMS）明细（剔除三家）.xlsx` |
-| 发运单 | `output/2025年全年发运单.xlsx` |
-
-每个匹配结果 Excel 含：**汇总表**（第一个 sheet）、**全部数据**、**各分类明细** sheet。
-
----
-
-## 四、分类说明
-
-| 分类 | 条件 |
-|------|------|
-| 2.Not test | 关键字段（订单/发货/开票金额、数量）有缺失 |
-| 1.1 完全匹配 | 数量差≈0、金额差<1 |
-| 1.2 金额不一致 | 数量差≈0、金额差≥1 |
-| 1.3 数量不一致 | 数量差≠0、金额差<1 |
-| 1.4 均不一致 | 数量差≠0、金额差≥1 |
-
-金额差 < 1 视为一致（考虑四舍五入）；数量差 < 0.01 视为一致。
-
----
-
-## 五、常用操作
-
-- **强制重新读取**：删除对应 pkl 后重新运行
-- **Excel 超限**：自动分多个 sheet（如 发运单_P1、发运单_P2）
-- **修改阈值**：在 match_oms.py / match_dms.py 中修改 `AMOUNT_THRESHOLD`、`QUANTITY_THRESHOLD`
-- **pkl 合规检查**：`python test/check_pkl_compliance.py`
-
----
-
-## 六、调试与问题解决
-
-### 6.1 新数据源适配
-
-| 类型 | 旧数据源 | 新数据源 |
-|------|----------|----------|
-| **订单** | `OMS25年1-12月订单及发货数据`，11/13 列 | `input/dingdan`，12 列（含 line_amount） |
-| **发运单** | 同订单目录，7/8 列 | `input/fayundan`，9 列（含 document_no、main_order_no） |
-| **发票** | Excel 2025-01～12.XLSX | `output/fapiao_2025_filtered.pkl` |
-
-**解决**：preprocess_oms_full_year.py 已支持新路径；订单补 `channel_name2=np.nan`；发运单映射 `main_order_no` 为主单号。
-
-### 6.2 2.Not test 误判
-
-**原因**：检查了所有列的缺失，额外列有空值即被判为 Not test。
-
-**解决**：只检查关键字段 `订单金额`、`订单数量`、`发货数量`、`开票金额`、`开票数量`。
-
-### 6.3 OMS 匹配键与发票不一致
-
-**解决**：统一 OMS 三单使用 **main_order_no + 物料** 作为匹配键，与发票侧主订单号对齐。
-
-### 6.4 汇总表与输出规范
-
-- 固定汇总行顺序（export_utils.FIXED_SUMMARY_ROW_ORDER）
-- 小记 = 四大类合计；总计 = 小记 + 仅发票
-- 5.有缺失 按 2025 年过滤
-
-### 6.5 DMS 总计与发票清单金额差异
-
-**说明**：总计基于「剔除三家」后的匹配结果，发票清单基于全部 DMS 发票。差异来自 1240、1250、1260 三家公司的发票金额，属预期口径差异。
-
-### 6.6 OMS 与 DMS 金额口径
-
-| 系统 | 金额字段 |
-|------|----------|
-| OMS | 实际金额（ZFN1） |
-| DMS | 含税金额 |
-
-### 6.7 PKL 缓存机制
-
-- match_oms 会写入 `pkl/oms_order.pkl`、`oms_delivery.pkl`、`oms_invoice.pkl`，存在则优先读缓存
-- match_dms 直接读源 pkl
-
-### 6.8 其他
-
-| 问题 | 解决方案 |
-|------|----------|
-| Excel 超限 | 超过 1,048,575 行自动分多个 sheet |
-| 内存占用高 | 使用 PKL 缓存；大数据量约 13–22GB 属正常 |
-| 编码问题 | 使用 chardet 检测 SQL 文件编码 |
-
----
-
-## 技术栈
-
-Python 3.8+ · pandas · openpyxl · chardet
-
----
-
-## 可复用工具包
-
-项目根目录下的 `triple_match_tool/` 为独立可复用包，仅包含三单匹配核心逻辑（不含 test）。可复制到其它项目使用，详见 [triple_match_tool/README.md](../triple_match_tool/README.md)。
+MIT（详见仓库 `LICENSE`）。
 
 ---
 
 <div align="center">
 
-**James Li · 审计数据分析工具集**
-
-📫 本工具用于内部审计与数据核对，辅助分析但不替代专业判断，不作为对外签字版本。
+*Disclaimer: Personal project and personal views. Not affiliated with or endorsed by KPMG or any client.*<br>
+*本仓库为个人项目与个人观点，与任何前/现雇主及客户无关。*
 
 </div>
